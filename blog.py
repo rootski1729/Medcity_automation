@@ -7,24 +7,21 @@ from openai import OpenAI  # Use the new OpenAI client
 
 load_dotenv()
 
-# Retrieve API key and endpoint from environment variables
 api_key = os.getenv("API_KEY")
 endpoint = os.getenv("BASE_URL")
 
-# Create FastAPI instance
 app = FastAPI()
 
-# Create an instance of the OpenAI client
+# create an instance of the Openai client
 client = OpenAI(api_key=api_key, base_url=endpoint)
 
-# Define a request body model
 class ChatRequest(BaseModel):
     user_message: str
 
 @app.post("/generate-response/")
 async def generate_response(request: ChatRequest):
     try:
-        # Call OpenAI API directly to get a response using the messages parameter
+        # calling openai API directly to get a response using the messages parameter
         completion = client.chat.completions.create(
             model=os.getenv("MODEL"),
             messages=[
@@ -60,7 +57,7 @@ async def generate_response(request: ChatRequest):
             raise HTTPException(status_code=500, detail=f"unsplash API error: {str(e)}")        
             
         
-        # Return the generated response
+        #reponses
         return {
             "response": completion.choices[0].message.content,
             "usage": dict(completion).get('usage'),  # Include usage information if needed
@@ -70,7 +67,7 @@ async def generate_response(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Run the app with uvicorn
+# Running
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
