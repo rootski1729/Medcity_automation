@@ -4,6 +4,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI  # Use the new OpenAI client
+import random
 
 load_dotenv()
 
@@ -26,7 +27,7 @@ async def generate_response(request: ChatRequest):
             model=os.getenv("MODEL"),
             messages=[
                 {"role": "system", "content": "You are a tourist who give blogs."},
-                {"role": "user", "content": request.user_message}
+                {"role": "user", "content": f"{request.user_message} write a blog about it."}
             ],
             max_tokens=512,
             top_p=0.8,
@@ -42,7 +43,7 @@ async def generate_response(request: ChatRequest):
             
             params={
                 "query": request.user_message,
-                "per_page": 2
+                "per_page": random.randint(2, 5)
             }
             
             unsplash_response = requests.get(url, headers=headers, params=params)
