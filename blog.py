@@ -2,19 +2,19 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 import requests
-from dotenv import load_dotenv
-from openai import OpenAI  # Use the new OpenAI client
+from dotenv import load_dotenv # Use the new OpenAI client
 import random
+import cohere 
 
 load_dotenv()
 
-api_key = os.getenv("API_KEY")
-endpoint = os.getenv("BASE_URL")
+
+
+cohere_api_key = os.getenv("COHERE_API_KEY")
+cohere_client = cohere.Client(cohere_api_key)
 
 app = FastAPI()
 
-# create an instance of the Openai client
-client = OpenAI(api_key=api_key, base_url=endpoint)
 
 class ChatRequest(BaseModel):
     user_message: str
@@ -22,18 +22,17 @@ class ChatRequest(BaseModel):
 @app.post("/generate-response/")
 async def generate_response(request: ChatRequest):
     try:
-        # calling openai API directly to get a response using the messages parameter
-        completion = client.chat.completions.create(
-            model=os.getenv("MODEL"),
-            messages=[
-                {"role": "system", "content": "You are a tourist who give blogs."},
-                {"role": "user", "content": f"{request.user_message} write a blog about it."}
-            ],
-            max_tokens=512,
-            top_p=0.8,
-            frequency_penalty=0.0,
-            presence_penalty=0.0
+        response = cohere_client.generate(
+            model = "command",
+            prompt=f"You are a tourist who writes blogs. {request.user_message} Write a blog about it.",
+            max_tokens=300,
+            temperature=0.8,
+            k=0,
+            p=0.8,
+            stop_sequences=["--"]
         )
+
+        generated_text = response.generations[0].text
         
         try:
             url=os.getenv("UNPLASH_BASE_URL")
@@ -43,7 +42,7 @@ async def generate_response(request: ChatRequest):
             
             params={
                 "query": request.user_message,
-                "per_page": random.randint(2, 5)
+                "per_page": random.randint(2, 4)
             }
             
             unsplash_response = requests.get(url, headers=headers, params=params)
@@ -60,8 +59,7 @@ async def generate_response(request: ChatRequest):
         
         #reponses
         return {
-            "response": completion.choices[0].message.content,
-            "usage": dict(completion).get('usage'),  # Include usage information if needed
+            "response":generated_text,
             "image_urls": image_urls
         }
     
