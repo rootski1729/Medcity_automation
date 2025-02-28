@@ -2,71 +2,97 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 import requests
-from dotenv import load_dotenv # Use the new OpenAI client
 import random
-import cohere 
-
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
+from dotenv import load_dotenv
+import cohere
 load_dotenv()
 
+# Initialize Firebase
+cred = credentials.Certificate(os.getenv("FIREBASE_CREDENTIALS_PATH"))
+firebase_admin.initialize_app(cred, {'storageBucket': f"{os.getenv('FIREBASE_PROJECT_ID')}.firebasestorage.app"})
+db = firestore.client()
+bucket = storage.bucket()
 
-
+# Initialize Cohere
 cohere_api_key = os.getenv("COHERE_API_KEY")
 cohere_client = cohere.Client(cohere_api_key)
 
-app = FastAPI()
+def get_random_input():
+    keywords_ref = db.collection('keyword').stream()
+    keyword_list = [doc.to_dict().get("phrase") for doc in keywords_ref]
+    
+    if not keyword_list:
+        return None
+    return random.choice(keyword_list)
 
-
-class ChatRequest(BaseModel):
-    user_message: str
-
-@app.post("/generate-response/")
-async def generate_response(request: ChatRequest):
+def generate_blog_content(keyword):
     try:
         response = cohere_client.generate(
-            model = "command",
-            prompt=f"You are a tourist who writes blogs. {request.user_message} Write a blog about it.",
-            max_tokens=300,
+            model="command",
+            prompt= f"""You are a tourist who writes blogs. {keyword} Write a blog about it with suitable title.
+            Format the response like this:
+            
+            Title: <Catchy blog title>
+            
+            Content:
+            <Blog content here>""",
+            max_tokens=520,
             temperature=0.8,
             k=0,
             p=0.8,
             stop_sequences=["--"]
         )
-
-        generated_text = response.generations[0].text
-        
-        try:
-            url=os.getenv("UNPLASH_BASE_URL")
-            headers = {
-                "Authorization": f"Client-ID {os.getenv('UNPLASH_ACCESS_KEY')}"
-            }
-            
-            params={
-                "query": request.user_message,
-                "per_page": random.randint(2, 4)
-            }
-            
-            unsplash_response = requests.get(url, headers=headers, params=params)
-            
-            if unsplash_response.status_code == 200:
-                unsplash_data = unsplash_response.json()
-                image_urls = [photo['urls']['regular'] for photo in unsplash_data['results']]
-            
-            else:
-                image_urls = []
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"unsplash API error: {str(e)}")        
-            
-        
-        #reponses
-        return {
-            "response":generated_text,
-            "image_urls": image_urls
-        }
-    
+        return response.generations[0].text
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return None
 
-# Running
+def fetch_image(keyword):
+    url = os.getenv("UNSPLASH_BASE_URL")
+    headers = {
+        "Authorization" : f"Client-ID {os.getenv('UNSPLASH_ACCESS_KEY')}"}
+    params = {
+        "query": keyword,
+        "per_page": 1
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code != 200:
+        return []
+
+    data = response.json()
+    return [photo['urls']['regular'] for photo in data['results']] 
+
+def upload_image(image_url, keyword):
+    response = requests.get(image_url, stream=True)
+    if response.status_code != 200:
+        return None
+    
+    blob = bucket.blob(f"blogs_img/{keyword}.jpg")
+    blob.upload_from_file(response.raw, content_type="image/jpeg")
+    blob.make_public()
+    return blob.public_url
+
+
+def main():
+    keyword = get_random_input()
+    if not keyword:
+        keyword = "trip to banaras uttar pradesh India" 
+
+    blog_content = generate_blog_content(keyword)
+    if not blog_content:
+        return None
+    image_urls = fetch_image(keyword)
+    image_url = upload_image(image_urls[0], keyword)
+
+    blog_data = {
+        "blog_description": blog_content,
+        "blog_image": image_url
+    }
+
+    db.collection('blog').add(blog_data)
+
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    main()
