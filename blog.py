@@ -37,14 +37,25 @@ def generate_blog_content(keyword):
             Title: <Catchy blog title>
             
             Content:
-            <Blog content here>""",
-            max_tokens=520,
+            <Blog content here with beautiful ending>""",
+            max_tokens=300,
             temperature=0.8,
             k=0,
             p=0.8,
-            stop_sequences=["--"]
+            stop_sequences=["End of blog"]
         )
-        return response.generations[0].text
+        
+        generated_text = response.generations[0].text
+        
+        title = None
+        content = None
+        
+        if "Title:" in generated_text and "Content:" in generated_text:
+            title, content = generated_text.split("Content:")
+            title = title.split("Title:")[1].strip()
+            content = content.strip()
+            
+        return title, content
     except Exception as e:
         return None
 
@@ -80,15 +91,18 @@ def main():
     if not keyword:
         keyword = "trip to banaras uttar pradesh India" 
 
-    blog_content = generate_blog_content(keyword)
-    if not blog_content:
+    title,content = generate_blog_content(keyword)
+    
+    if not title or not content:
         return None
     image_urls = fetch_image(keyword)
     image_url = upload_image(image_urls[0], keyword)
 
     blog_data = {
-        "blog_description": blog_content,
-        "blog_image": image_url
+        "title": title,
+        "description": content,
+        "image": image_url,
+        "createdAt " : firestore.SERVER_TIMESTAMP
     }
 
     db.collection('blog').add(blog_data)
