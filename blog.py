@@ -1,4 +1,4 @@
-
+import uuid
 import os
 import requests
 import random
@@ -109,8 +109,9 @@ def upload_image(app,image_url, keyword):
     response = requests.get(image_url, stream=True)
     if response.status_code != 200:
         return None
-    
-    blob = bucket.blob(f"blogs_img/{keyword}.jpg")
+
+    unique_id = uuid.uuid4().hex
+    blob = bucket.blob(f"blogs_img/{keyword}_{unique_id}.jpg")
     blob.upload_from_file(response.raw, content_type="image/jpeg")
     blob.make_public()
     return blob.public_url
