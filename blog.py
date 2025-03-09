@@ -134,10 +134,10 @@ def main(app):
     image_url = upload_image(app,image_urls[0], keyword)
 
     blog_data = {
-        "title": title,
+        "title": title.lower(),
         "description": content,
         "image": image_url,
-        "createdAt " : datetime.datetime.now()
+        "createdAt" : datetime.datetime.now()
     }
 
     save_blog(app, blog_data)
